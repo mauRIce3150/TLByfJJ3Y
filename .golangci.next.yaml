@@ -1,0 +1,42 @@
+# https://golangci-lint.run/usage/configuration/
+#
+# This file is for linters that might be interesting to enforce in the future.
+# Rules that should be enforced immediately belong in [.golangci.yaml].
+#
+# Both files are used by [.github/workflows/lint.yaml].
+
+linters:
+  disable-all: true
+  enable:
+    - contextcheck
+    - err113
+    - gocritic
+    - godot
+    - godox
+    - gofumpt
+    - gosec # exclude-use-default
+    - nilnil
+    - nolintlint
+    - predeclared
+    - revive
+    - staticcheck # exclude-use-default
+    - tenv
+    - thelper
+    - tparallel
+    - wastedassign
+
+issues:
+  exclude-rules:
+    # We call external linters when they are installed: Flake8, ShellCheck, etc.
+    - linters: [gosec]
+      path: '_test[.]go$'
+      text: 'G204: Subprocess launched with variable'
+
+  # https://github.com/golangci/golangci-lint/issues/2239
+  exclude-use-default: false
+
+linters-settings:
+  thelper:
+    # https://github.com/kulti/thelper/issues/27
+    tb:   { begin: true, first: true }
+    test: { begin: true, first: true, name: true }
