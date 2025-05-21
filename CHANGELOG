@@ -1,0 +1,66 @@
+* In progress
+- Forward reasoning, calc proofs
+
+* Version 0.6:
+- New feature: Files can now be loaded directly from the local file system.
+- Improvement: When supported, the download/save button produces a file picker dialog.
+- Improvement: Can set associativity and precedence of mix-fix input syntax.
+- Improvement: Notation blocks can now define more than one mix-fix syntax.
+- Improvement: Proof style buttons condensed into hover-menu.
+- New feature: Summary proof display style (breaks file format)
+- New feature: Constructors. Identifiers that begin with '@' are assumed to be constructors, 
+               which are rendered specially, and are automatically considered to be injective
+               and disjoint from all other constructors. Injectivity and Disjointness are
+               automatically used when eliminating on an equality assumption where both
+               sides are constructors.
+- Bug fix: Elimination rules that only refer to outer skolem variables no longer cause a crash.
+
+* Version 0.5.1
+- New feature: Tooltip footnotes for references and footnotes.
+- New feature: Links are supported in paragraphs as are images by URL.
+- New feature: Goal tag markup
+- New feature: Overline syntax from * postfix.
+- New feature: Embedding rules in text
+- New feature: Embedding rule names in text
+- New feature: "Reader mode" that hides buttons.
+- New feature: "Presentation mode" that shows one section at a time.
+- Improvement: Auto-rename introduced metas to avoid shadowing.
+- New feature: Basic mix-fix syntax notation support.
+
+* Version 0.5
+- Improvement: Reflexivity now auto-applied by clicking the rewrite button
+- New feature: Can now define multiple rules in an Axiom block
+- New feature: Can now define "inductive definitions" as a block of
+  introduction rules. Cases and induction rules are then auto-generated.
+- Improvement: Can rewrite with local assumptions
+- Improvement: Unification now gives better solutions for induction rules.
+- Improvement: Axiom blocks can now contain multiple rules.
+
+* Version 0.4
+- New feature: Goal display on RHS
+- Improvement: Only displays applicable rules
+- New feature: Night mode
+- New feature: Prose style proofs
+- New feature: Apply a rule as an elimination rule
+- New feature: Apply an equality rule as a rewrite
+- Improvement: Holbert documents are now printable
+
+* Version 0.3.1
+- Improvement: Banished `String` representations to improve performance 
+- Improvement: UI Performance greatly improved by not updating model on every keystroke.
+
+* Version 0.3
+- New feature: Can now instantiate metavariables in proofs
+- Improvement: Metavariables are represented numerically for efficiency.
+- Bug fix: Incorrect version number in HTML title 
+
+* Version 0.2
+- New feature: Tooltips are now on all icons
+- New feature: Can now download documents as a JSON blob
+- New feature: Can now load documents from a JSON blob via XHR
+- Change: Now loads index.holbert on startup
+- Bug fix: Does not display trash can on the base conclusion of a rule.
+- Bug fix: Fixed font sizes for heading editors
+
+* Version 0.1
+Pre-release version.
