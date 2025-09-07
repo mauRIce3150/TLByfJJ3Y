@@ -1,0 +1,250 @@
+# BBTravis CI configuration file
+language: unknown
+
+label_mapping:
+  TWISTED: tw
+  SQLALCHEMY: sqla
+  SQLALCHEMY_MIGRATE: sqlam
+  latest: l
+  PYTHON: py
+  TESTS: t
+  WORKER_PYTHON: wp
+env:
+  global:
+  - BUILDBOT_TEST_DB_URL=sqlite://
+  - NUM_CPU=700m
+  - MEMORY_SIZE=1G
+  - CHROME_BIN=/usr/bin/google-chrome
+  # Needed to ignore specific warns, otherwise, it'll warn a generic message
+  - SQLALCHEMY_WARN_20=1
+  matrix: []
+matrix:
+  fast_finish: true
+  include:
+    # ruff, docs first as they're more likely to find issues
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=ruff
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=docs
+    - env: PYTHON=3.9 TESTS=mypy
+    - env: PYTHON=3.9 TESTS=prettier
+
+    # add js tests in separate job. Start it early because it is quite long
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=js_build NUM_CPU=2 MEMORY_SIZE=1G
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=js_unit NUM_CPU=2 MEMORY_SIZE=1G
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=e2e_react_whl NUM_CPU=2 MEMORY_SIZE=2G
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=e2e_react_tgz NUM_CPU=2 MEMORY_SIZE=2G
+    - env: PYTHON=3.12 TWISTED=latest SQLALCHEMY=latest TESTS=e2e_react_whl NUM_CPU=2 MEMORY_SIZE=2G
+    - env: PYTHON=3.12 TWISTED=latest SQLALCHEMY=latest TESTS=e2e_react_tgz NUM_CPU=2 MEMORY_SIZE=2G
+
+    # include "ci" string into the name of the status that is eventually submitted to Github, so
+    # that the codecov.io service would wait until this build is finished before creating report.
+    - env: PYTHON=3.9 TREQ=22.2.0 TWISTED=24.7.0 SQLALCHEMY=latest NUM_CPU=2 TESTS=trial
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=1.4.52 NUM_CPU=2 TESTS=trial
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest NUM_CPU=2 TESTS=ci/coverage
+    - env: PYTHON=3.10 TWISTED=latest SQLALCHEMY=latest NUM_CPU=2 TESTS=trial
+    - env: PYTHON=3.11 TWISTED=latest SQLALCHEMY=latest NUM_CPU=2 TESTS=trial
+    - env: PYTHON=3.12 TWISTED=latest SQLALCHEMY=latest NUM_CPU=2 TESTS=trial
+    - env: PYTHON=3.13 TWISTED=latest SQLALCHEMY=latest NUM_CPU=2 TESTS=trial
+
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest NUM_CPU=2 TESTS=dev_virtualenv
+
+    # Worker-master interoperability tests
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=interop WORKER_PYTHON=3.9
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=interop WORKER_PYTHON=3.8
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=interop WORKER_PYTHON=3.7
+
+    # Worker tests on older python and twisted package combinations.
+    - env: PYTHON=3.7 TREQ=22.2.0 TWISTED=21.2.0 SQLALCHEMY=latest TESTS=trial_worker
+    - env: PYTHON=3.8 TREQ=22.2.0 TWISTED=21.2.0 SQLALCHEMY=latest TESTS=trial_worker
+    - env: PYTHON=3.9 TREQ=22.2.0 TWISTED=21.2.0 SQLALCHEMY=latest TESTS=trial_worker
+
+    # Configuration when SQLite database is persistent between running tests
+    # (by default in other tests in-memory SQLite database is used which is
+    # recreated for each test).
+    # Helps to detect issues with incorrect database setup/cleanup in tests.
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=trial BUILDBOT_TEST_DB_URL=sqlite:////scratch/test_db{TEST_ID}.sqlite
+    # Configuration that runs tests with real MySQL database
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=trial BUILDBOT_TEST_DB_URL=mysql+mysqldb://travis@127.0.0.1/bbtest{TEST_ID}
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=trial BUILDBOT_TEST_DB_URL=mysql+mysqldb://travis@127.0.0.1/bbtest{TEST_ID}?storage_engine=InnoDB
+
+    # Configuration that runs tests with real PostgreSQL database with pg8000 and psycopg2 drivers
+    # psycopg2 uses Peer Authentication which is configured in the dockerfile, while pg8000 use md5 auth with dummy password
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=trial BUILDBOT_TEST_DB_URL=postgresql+psycopg2:///bbtest{TEST_ID}
+    - env: PYTHON=3.9 TWISTED=latest SQLALCHEMY=latest TESTS=trial BUILDBOT_TEST_DB_URL='postgresql+pg8000:///bbtest{TEST_ID}?user=buildbot&password=x'
+
+# Dependencies installation commands
+install:
+  - title: setup virtualenv
+    cmd: |
+      rm -rf /tmp/bbvenv
+      python$PYTHON -m venv /tmp/bbvenv
+  - /tmp/bbvenv/bin/pip install -r requirements-pip.txt
+  - condition: TESTS not in ("dev_virtualenv", "e2e_react_whl", "e2e_react_tgz", "trial_worker")
+    cmd: /tmp/bbvenv/bin/pip install -r requirements-ci.txt
+  # On python 3.12 workaround done in dcbc28d1431e1aae892f7fdc0e266253365bc11e is no longer enough.
+  - condition: TESTS not in ("dev_virtualenv", "e2e_react_whl", "e2e_react_tgz", "trial_worker")
+    cmd: /tmp/bbvenv/bin/pip install -e master -e worker
+  - condition: TESTS == "dev_virtualenv"
+    cmd: /tmp/bbvenv/bin/pip install -r requirements-ci.txt -r requirements-ciworker.txt -r requirements-cidocs.txt
+  - condition: TESTS == "trial_worker"
+    cmd: /tmp/bbvenv/bin/pip install -r requirements-ciworker.txt
+  - condition: TESTS == "docs"
+    cmd: /tmp/bbvenv/bin/pip install -r requirements-cidocs.txt
+  - condition: '"sqlite" not in BUILDBOT_TEST_DB_URL'
+    cmd: /tmp/bbvenv/bin/pip install -r requirements-cidb.txt
+  - condition: TESTS == "interop"
+    cmd: |
+      set -e
+      rm -rf /tmp/bbworkervenv
+      python$WORKER_PYTHON -m venv /tmp/bbworkervenv
+      /tmp/bbworkervenv/bin/pip install -r requirements-pip.txt
+      /tmp/bbworkervenv/bin/pip install -r requirements-ciworker.txt
+  - title: pip installs for backward compat
+    cmd: |
+      # pip installs for backward compat
+      set -e
+      pkg_ver=""
+      if [ ! -z "$TREQ" ]; then
+        pkg_ver="${pkg_ver} treq==$TREQ"
+      fi
+      if [ "$TWISTED" = "trunk" ]; then
+        pkg_ver="${pkg_ver} git+https://github.com/twisted/twisted"
+      elif [ ! -z "$TWISTED" -a "$TWISTED" != "latest" ]; then
+        pkg_ver="${pkg_ver} Twisted==$TWISTED"
+      fi
+      if [ ! -z "$SQLALCHEMY" -a "$SQLALCHEMY" != "latest" ]; then
+        pkg_ver="${pkg_ver} sqlalchemy==$SQLALCHEMY"
+      fi
+
+      if [ ! -z "$pkg_ver" ]; then
+        /tmp/bbvenv/bin/python -m pip install ${pkg_ver}
+      fi
+  - step: !ShellCommand
+        command: "/tmp/bbvenv/bin/pip check"
+        warnOnFailure: True
+        flunkOnFailure: False
+        haltOnFailure: False
+        name: "pip check"
+    title: "pip check"
+
+before_script:
+  # create real database for tests
+  - condition: '"mysql" in BUILDBOT_TEST_DB_URL'
+    cmd: /prepare_mysql
+  - condition: '"postgresql" in BUILDBOT_TEST_DB_URL'
+    cmd: |
+        /prepare_postgres
+        # for pg8000 driver we can't use peer authentication or empty password, so set a dummy password
+        # This also serves as a way to wait that the database is ready
+        while ! psql -d bbtest -c 'ALTER USER "buildbot" WITH PASSWORD '"'x'"';' ; do sleep 1 ; done
+
+# Tests running commands
+script:
+  - title: frontend tests
+    condition: TESTS == "js_build"
+    cmd: |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      make frontend_install_tests
+
+  - title: frontend unit tests
+    condition: TESTS == "js_unit"
+    cmd: |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      export VITEST_MIN_THREADS=1
+      export VITEST_MAX_THREADS=8
+      make frontend_tests
+
+  - title: master and worker tests
+    condition: TESTS in ("dev_virtualenv", "trial")
+    cmd: /tmp/bbvenv/bin/trial -j8 --reporter=text --rterrors buildbot.test buildbot_worker.test
+
+  - title: interop tests
+    condition: TESTS == "interop"
+    cmd: |
+      SANDBOXED_WORKER_PATH=/tmp/bbworkervenv/bin/buildbot-worker \
+        /tmp/bbvenv/bin/coverage run --rcfile=.coveragerc \
+          /tmp/bbvenv/bin/trial --reporter=text --rterrors buildbot.test.integration.interop
+
+  - title: worker tests
+    condition: TESTS == "trial_worker"
+    cmd: /tmp/bbvenv/bin/trial  --reporter=text --rterrors buildbot_worker.test
+
+  # run tests under coverage for latest only (it's slower..)
+  - title: coverage tests
+    condition: TESTS == "ci/coverage"
+    cmd: /tmp/bbvenv/bin/coverage run --rcfile=.coveragerc /tmp/bbvenv/bin/trial -j8 --reporter=text --rterrors buildbot.test buildbot_worker.test
+
+  - title: ruff
+    condition: TESTS == "ruff"
+    cmd:  |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      ruff check `git ls-files |grep '.py$'` && \
+      ruff format --check `git ls-files |grep '.py$'`
+
+  - title: prettier
+    condition: TESTS == "prettier"
+    cmd:  |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      make frontend_yarn_install
+      for subdir in www/base www/console_view www/grid_view www/waterfall_view www/wsgi_dashboards www/data-module www/ui; do \
+        cd $$subdir; \
+        $(YARN) run prettier -w src *.ts *.js --check; \
+        cd - > /dev/null; \
+      done
+
+  - title: mypy
+    condition: TESTS == "mypy"
+    cmd:  |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      make mypy
+
+  # Build documentation
+  - title: docs
+    condition: TESTS == "docs"
+    cmd:  |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      make docs-release
+
+  # Run spell checker on documentation
+  - title: spelling
+    condition: TESTS == "docs"
+    cmd:  |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      make docs-release-spelling
+
+  - title: maketarballs
+    condition: TESTS in ("e2e_react_whl", "e2e_react_tgz")
+    cmd:  |
+      export PATH=/tmp/bbvenv/bin/:$PATH
+      make tarballs
+
+  - title: end to end tests
+    condition: TESTS == "e2e_react_whl"
+    cmd: ./common/smokedist-react.sh whl
+
+  - title: tarballs end to end tests
+    condition: TESTS == "e2e_react_tgz"
+    cmd: ./common/smokedist-react.sh tar.gz
+
+notifications:
+  email: false
+
+after_script:
+  - |
+      # codecov
+      if [ $TESTS = ci/coverage ]; then
+        curl -Os https://uploader.codecov.io/v0.4.1/linux/codecov
+        echo "32cb14b5f3aaacd67f4c1ff55d82f037d3cd10c8e7b69c051f27391d2e66e15c  codecov" | sha256sum --check
+        chmod +x ./codecov
+        CODECOV_TOKEN="b80c80d7-689d-46d7-b1aa-59168bb4c9a9" ./codecov
+      fi
+  # List installed packages along with their versions.
+  - "/tmp/bbvenv/bin/pip list"
+
+sudo: false
+branches:
+  # Only build main-line branches.
+  only:
+    - master
+    - eight
+git:
+  depth: 300
