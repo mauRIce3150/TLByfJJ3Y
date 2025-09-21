@@ -1,0 +1,59 @@
+name: Event App CI
+run-name: Build and Test 🚀
+on: [push, pull_request]
+jobs:
+  docker:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    name: Docker Compose
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Start containers
+        run: docker-compose -f "docker-compose.yml" up -d --build
+
+      - name: Install node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Stop containers
+        if: always()
+        run: docker-compose -f "docker-compose.yml" down
+#Remaining tests can be added back once we add deployment to the pipeline
+#  event_test:
+#    needs: docker
+#    defaults:
+#      run:
+#        working-directory: Event-Management-Service
+#    name: Event Integration Tests
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Set up Node.js
+#        uses: actions/setup-node@v3
+#        with:
+#          node-version: 18.x
+#      - run: yarn run postman-test
+#  cypress-run:
+#    needs: docker
+#    defaults:
+#      run:
+#        working-directory: COM3014-Group14-Event-Management-App/Interface-Service
+#    name: E2E Tests
+#    runs-on: ubuntu-22.04
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v3
+#      # Install NPM dependencies, cache them correctly
+#      # and run all Cypress tests
+#      - name: Cypress run
+#        uses: cypress-io/github-action@v5
+#        with:
+#          build: yarn run build
+#          start: yarn run start
+
